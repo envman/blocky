@@ -1,8 +1,0 @@
-function() {
-  
-  return {
-    send: function() {
-      
-    },
-  }
-}

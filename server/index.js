@@ -11,6 +11,10 @@ let fullAddress = process.argv[2]
 let store = createStore()
 
 if (fullAddress) {
+  connect(fullAddress)
+}
+
+function connect(fullAddress) {
   console.log(`Connecting to ${fullAddress}`)
   
   let address = fullAddress.split(':')
@@ -19,36 +23,32 @@ if (fullAddress) {
   client.connect(address[1], address[0], () => {
     console.log(`Connected to ${address.join(':')}`)
 
-    client.write(`ID:${me}`)
-
     let emitter = new EventEmitter()
+
+    addPeer({
+      ip: address[0],
+      port: address[1],
+      write: msg => client.write(msg),
+      event: emitter
+    })
 
     client.on('data', (data) => {
       data = data.toString()
       
-      console.log(`client received ${data}`)
-      
-      if (data.startsWith('ID:')) {
-        addPeer({
-          id: data.split(':')[1],
-          ip: address[0],
-          port: address[1],
-          write: msg => client.write(msg),
-          event: emitter
-        })
-      } else {
-        emitter.emit(data)
-      }
+      emitter.emit('msg', data)
     })
     
     client.on('error', (err) => {
       console.error(err)
     })    
   })
+} else {
+  console.log('No connection supplied, creating genesis block')
+  
+  
 }
-// return
+
 const port = help.random(1300, 1400)
-// const port = 1404
 
 createServer()
   .then(() => {
@@ -58,7 +58,7 @@ createServer()
 let peers = []
 
 function addPeer(peer) {
-  console.log(`Adding peer ${peer.id} ${peer.ip}:${peer.port}`)
+  console.log(`Adding peer ${peer.ip}:${peer.port}`)
   
   peer.event.on('msg', (data) => {
     console.log(`Received ${data}`)
@@ -66,9 +66,7 @@ function addPeer(peer) {
     if (data.startsWith('HASH')) {
       let hash = data.split(':')[1]
       
-      console.log('process hash')
       if (!store.saw(hash)) {
-        console.log('didnt see')
         peer.write(`DATA:${hash}`)
       }
     } else if (data.startsWith('DATA')) {
@@ -83,8 +81,15 @@ function addPeer(peer) {
       let hash = bits[1]
       let blob = bits[2]
       
-      if (store.check(hash, blob)) {
+      let obj = store.check(hash, blob)
+      if (obj) {
         broadCast(`HASH:${hash}`)
+        
+        if (obj.type == 'peer') {
+          if (peers.every(p => p.ip != obj.ip && p.port != obj.port)) {
+            connect(`${obj.ip}:${obj.port}`)
+          }
+        }
       }
      }
   })
@@ -92,21 +97,18 @@ function addPeer(peer) {
   peers.push(peer)
   
   let c = {
-    id: peer.id,
+    type: 'peer',
     ip: peer.ip,
     port: peer.port,
   }
   
-  // peer.write(`ID:${me}`)
-  broadCast(`HASH:${store.add(c)}`, [peer])
+  broadCast(`HASH:${store.add(c)}`)
 }
 
 function broadCast(msg, ignore) {
   console.log(`Broadcast ${msg}`)
   
-  let sendTo = peers.filter(p => ignore.indexOf(p) < 0)
-  
-  sendTo.map(p => p.write(msg))
+  peers.map(p => p.write(msg))
 }
 
 function createServer() {
@@ -121,22 +123,14 @@ function createServer() {
 
       let emitter = new EventEmitter()
 
-      connection.on('data', (data) => {
-        console.log(`Server received ${data}`)
-        
-        if (data.startsWith('ID:')) {
-          
-          connection.write(`ID:${me}`)
-          
-          addPeer({
-            id: data.split(':')[1],
-            ip: connection.remoteAddress.split(':')[3],
-            port: connection.remotePort,
-            write: msg => connection.write(msg),
-            event: emitter
-          })
-        }
+      addPeer({
+        ip: connection.remoteAddress.split(':')[3],
+        port: connection.remotePort,
+        write: msg => connection.write(msg),
+        event: emitter
+      })
 
+      connection.on('data', (data) => {
         emitter.emit('msg', data)
       })
 
