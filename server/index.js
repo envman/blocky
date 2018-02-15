@@ -19,16 +19,16 @@ if (fullAddress) {
   client.connect(address[1], address[0], () => {
     console.log(`Connected to ${address.join(':')}`)
 
+    client.write(`ID:${me}`)
+
+    let emitter = new EventEmitter()
+
     client.on('data', (data) => {
       data = data.toString()
       
       console.log(`client received ${data}`)
       
-      // console.log(`recieved message ${data}`)
-      let emitter
       if (data.startsWith('ID:')) {
-        emitter = new EventEmitter()
-        
         addPeer({
           id: data.split(':')[1],
           ip: address[0],
@@ -43,9 +43,7 @@ if (fullAddress) {
     
     client.on('error', (err) => {
       console.error(err)
-    })
-    
-    client.write(`ID:${me}`)    
+    })    
   })
 }
 // return
@@ -99,13 +97,16 @@ function addPeer(peer) {
     port: peer.port,
   }
   
-  broadCast(`HASH:${store.add(c)}`)
+  // peer.write(`ID:${me}`)
+  broadCast(`HASH:${store.add(c)}`, [peer])
 }
 
-function broadCast(msg) {
+function broadCast(msg, ignore) {
   console.log(`Broadcast ${msg}`)
   
-  peers.map(p => p.write(msg))
+  let sendTo = peers.filter(p => ignore.indexOf(p) < 0)
+  
+  sendTo.map(p => p.write(msg))
 }
 
 function createServer() {
@@ -118,12 +119,14 @@ function createServer() {
 
       connection.setEncoding('utf8')
 
+      let emitter = new EventEmitter()
+
       connection.on('data', (data) => {
         console.log(`Server received ${data}`)
         
-        let emitter
         if (data.startsWith('ID:')) {
-          emitter = new EventEmitter()
+          
+          connection.write(`ID:${me}`)
           
           addPeer({
             id: data.split(':')[1],
@@ -132,13 +135,9 @@ function createServer() {
             write: msg => connection.write(msg),
             event: emitter
           })
-          
-          connection.write(`ID:${me}`)
         }
-        
-        if (emitter) {
-          emitter.emit('msg', data)
-        }
+
+        emitter.emit('msg', data)
       })
 
       connection.once('close', () => {
