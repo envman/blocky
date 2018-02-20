@@ -94,15 +94,11 @@ function addPeer(peer) {
           if (obj.previous == '0000000000000000000000000000000000000000000000000000000000000000') {
             miner = createMiner({genesis: obj})
           } else {
-            store.get(obj.previous)  
+            if (!store.get(obj.previous)) {
+              peer.write(`DATA:${obj.previous}`)
+            }
           }
         }
-      }
-    } else if (data.startsWith('LONGEST')) {
-      if (miner) {
-        let longest = miner.getLongest()
-        
-        peer.write(`HASH:${longest}`)
       }
     }
   })
@@ -169,11 +165,6 @@ function randomPeer() {
 }
 
 setInterval(() => {
-  if (!miner) {
-    randomPeer()
-      .write(`LONGEST`)
-  }
-  
   store
     .missing()
     .map(m => randomPeer().write(`DATA:${m}`))

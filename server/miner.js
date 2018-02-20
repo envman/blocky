@@ -1,31 +1,47 @@
 const sha256 = require('sha256')
+const fork = require('child_process').fork
+const EventEmitter = require('events')
 
 const genesisCode = '0000000000000000000000000000000000000000000000000000000000000000'
+const difficulty = 4
 
 module.exports = function createMiner(opts) {
-  let currentBlock = {}
-  
   let pendingMoves = []
-  let genesis = {}
-  
-  let tips = []
+  let tip = genesisCode
+  let emitter = new EventEmitter()
   
   if (!opts.genesis) {
     let genesis = {
       type: 'block',
       previous: genesisCode,
-      difficulty: 2,
+      difficulty: difficulty,
       nonce: 0,
       actions: []
     }
     
     solve(genesis)
-    let hash = opts.store.add(genesis)
-    
-    console.log(`Genesis block created ${hash}`)
-    lastBlock = hash
-    tips.push(genesis)
+    tip = opts.store.add(genesis)
   }
+  
+  let process = fork('./solver')
+  
+  process.on('message', (msg) => {
+    console.log('Block was solved ', hash(msg))
+    
+    tip = hash(msg)
+    opts.store.add(msg)
+    emitter.emit('block', msg)
+    
+    process.send({
+      type: 'block',
+      body: createBlock(tip, pendingMoves),
+    })
+  })
+  
+  process.send({
+    type: 'block',
+    body: createBlock(tip, pendingMoves),
+  })
   
   return {
     addMove: function addMove(move) {
@@ -35,17 +51,34 @@ module.exports = function createMiner(opts) {
     addBlock: function addBlock(block) {
       // TODO: check block is valid (hash & contents)
       
-      let current = tips[0]
+      let current = opts.store.get(tip)
       let proposed = block
       
       if (distance(current, store) < distance(proposed, store)) {
-        tips[0] = proposed
+        tip = hash(proposed)
+        
+        process.message({
+          type: 'block',
+          body: createBlock(tip, pendingMoves),
+        })
       }
     },
     
-    getLongest: function getLongest() {
-      return tips[0]
+    stop: function stop() {
+      process.message({type: 'kill'})
     },
+    
+    emitter
+  }
+}
+
+function createBlock(previous, actions) {
+  return {
+    type: 'block',
+    previous: previous,
+    difficulty: difficulty,
+    nonce: 0,
+    actions: actions
   }
 }
 
