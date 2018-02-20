@@ -18,17 +18,32 @@ module.exports = function createStore() {
         return data[hash]
       }
       
-      console.log(`I dun saw ${hash}`)
       data[hash] = undefined
     },
     
     check: function check(hash, obj) {
       
-      if (hash == sha256.x2(obj)) {
-        console.log(`I dun got ${hash}`)
-        
+      if (hash == sha256.x2(obj)) {        
         return data[hash] = JSON.parse(obj)
       }
-    }
+    },
+    
+    get: function get(hash) {
+      if (data[hash]) {
+        return data[hash]
+      }
+      
+      data[hash] = undefined
+    },
+    
+    missing: function missing() {
+      return Object.getOwnPropertyNames(data)
+        .filter(f => !data[f])
+    },
+    
+    all: function all() {
+      return Object.getOwnPropertyNames(data)
+        .map(p => ({hash: p, data: data[p]}))
+    },
   }
 }

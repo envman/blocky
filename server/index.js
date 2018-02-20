@@ -1,17 +1,22 @@
 const net = require('net')
-const shortid = require('shortid')
 const EventEmitter = require('events')
 const sha256 = require('sha256')
+// const shortid = require('shortid')
 
 const help = require('./help')
 const createStore = require('./store')
+const createMiner = require('./miner')
 
-let me = shortid()
 let fullAddress = process.argv[2]
 let store = createStore()
+let miner
 
 if (fullAddress) {
   connect(fullAddress)
+} else {
+  console.log('No connection supplied, creating genesis block')
+  
+  miner = createMiner({store: store})
 }
 
 function connect(fullAddress) {
@@ -42,10 +47,6 @@ function connect(fullAddress) {
       console.error(err)
     })    
   })
-} else {
-  console.log('No connection supplied, creating genesis block')
-  
-  
 }
 
 const port = help.random(1300, 1400)
@@ -89,9 +90,21 @@ function addPeer(peer) {
           if (peers.every(p => p.ip != obj.ip && p.port != obj.port)) {
             connect(`${obj.ip}:${obj.port}`)
           }
+        } else if (obj.type == 'block') {
+          if (obj.previous == '0000000000000000000000000000000000000000000000000000000000000000') {
+            miner = createMiner({genesis: obj})
+          } else {
+            store.get(obj.previous)  
+          }
         }
       }
-     }
+    } else if (data.startsWith('LONGEST')) {
+      if (miner) {
+        let longest = miner.getLongest()
+        
+        peer.write(`HASH:${longest}`)
+      }
+    }
   })
   
   peers.push(peer)
@@ -150,3 +163,18 @@ function createServer() {
     })
   })
 }
+
+function randomPeer() {
+  return peers[help.random(0, peers.length - 1)]
+}
+
+setInterval(() => {
+  if (!miner) {
+    randomPeer()
+      .write(`LONGEST`)
+  }
+  
+  store
+    .missing()
+    .map(m => randomPeer().write(`DATA:${m}`))
+}, 1000)
