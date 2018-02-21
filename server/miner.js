@@ -3,7 +3,7 @@ const fork = require('child_process').fork
 const EventEmitter = require('events')
 
 const genesisCode = '0000000000000000000000000000000000000000000000000000000000000000'
-const difficulty = 4
+const difficulty = 5
 
 module.exports = function createMiner(opts) {
   let pendingMoves = []
@@ -30,7 +30,7 @@ module.exports = function createMiner(opts) {
     
     tip = hash(msg)
     opts.store.add(msg)
-    emitter.emit('block', msg)
+    emitter.emit('block', tip)
     
     process.send({
       type: 'block',

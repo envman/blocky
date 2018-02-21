@@ -6,6 +6,7 @@ module.exports = function createStore() {
   return {
     add: function add(obj) {
       let hash = sha256.x2(JSON.stringify(obj))
+      // console.log(`Hash of ${JSON.stringify(obj)} Is ${hash}`)
       
       data[hash] = obj
       
@@ -22,10 +23,14 @@ module.exports = function createStore() {
     },
     
     check: function check(hash, obj) {
+      // console.log(`Hash of ${obj} Is ${sha256.x2(obj)}`)
       
-      if (hash == sha256.x2(obj)) {        
-        return data[hash] = JSON.parse(obj)
+      if (hash == sha256.x2(JSON.stringify(obj))) {        
+        // console.log(`${hash} Is Valid adding to store`)
+        return data[hash] = obj
       }
+      
+      console.log(`Invalid ${hash}`)
     },
     
     get: function get(hash) {

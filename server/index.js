@@ -1,7 +1,5 @@
 const net = require('net')
 const EventEmitter = require('events')
-const sha256 = require('sha256')
-// const shortid = require('shortid')
 
 const help = require('./help')
 const createStore = require('./store')
@@ -17,6 +15,13 @@ if (fullAddress) {
   console.log('No connection supplied, creating genesis block')
   
   miner = createMiner({store: store})
+  
+  miner.emitter.on('block', (hash) => {
+    broadCast({
+      type: 'HASH',
+      value: hash
+    })
+  })
 }
 
 function connect(fullAddress) {
@@ -33,14 +38,19 @@ function connect(fullAddress) {
     addPeer({
       ip: address[0],
       port: address[1],
-      write: msg => client.write(msg),
+      write: msg => {
+        // console.log(`WRITE: ${msg}`)
+        client.write(msg + '__')
+      },
       event: emitter
     })
 
     client.on('data', (data) => {
       data = data.toString()
       
-      emitter.emit('msg', data)
+      let parts = data.split('__').filter(p => p.length > 0)
+      
+      parts.map(p => emitter.emit('msg', p))
     })
     
     client.on('error', (err) => {
@@ -62,40 +72,66 @@ function addPeer(peer) {
   console.log(`Adding peer ${peer.ip}:${peer.port}`)
   
   peer.event.on('msg', (data) => {
-    console.log(`Received ${data}`)
+    // console.log(`Received ${data}`)
+    let message = JSON.parse(data)
     
-    if (data.startsWith('HASH')) {
-      let hash = data.split(':')[1]
+    if (message.type == 'HASH') {
+      let hash = message.value
       
       if (!store.saw(hash)) {
-        peer.write(`DATA:${hash}`)
+        peer.write(JSON.stringify({
+          type: 'DATA',
+          value: hash
+        }))
       }
-    } else if (data.startsWith('DATA')) {
-      let hash = data.split(':')[1]
+    } else if (message.type == 'DATA') {
+      let hash = message.value
       
       if (store.saw(hash)) {
-        peer.write(`BLOB:${hash}:${JSON.stringify(store.saw(hash))}`)
+        peer.write(JSON.stringify({
+          type: 'BLOB',
+          value: hash,
+          body: store.get(hash)
+        }))
       }
-    } else if (data.startsWith('BLOB')) {
+    } else if (message.type == 'BLOB') {
       let bits = data.split(':')
       
-      let hash = bits[1]
-      let blob = bits[2]
+      let hash = message.value
+      let blob = message.body
+      
+      if (store.get(hash)) {
+        console.log(`${hash} Exists Ignore`)
+        return
+      }
       
       let obj = store.check(hash, blob)
       if (obj) {
-        broadCast(`HASH:${hash}`)
+        broadCast({
+          type: 'HASH',
+          value: hash,
+        })
         
         if (obj.type == 'peer') {
-          if (peers.every(p => p.ip != obj.ip && p.port != obj.port)) {
-            connect(`${obj.ip}:${obj.port}`)
-          }
+          // if (peers.every(p => p.ip != obj.ip && p.port != obj.port)) {
+            // connect(`${obj.ip}:${obj.port}`)
+          // }
         } else if (obj.type == 'block') {
           if (obj.previous == '0000000000000000000000000000000000000000000000000000000000000000') {
-            miner = createMiner({genesis: obj})
+            miner = createMiner({genesis: obj, store: store})
+            
+            miner.emitter.on('block', (hash) => {
+              broadCast({
+                type: 'HASH',
+                value: hash
+              })
+            })
           } else {
             if (!store.get(obj.previous)) {
-              peer.write(`DATA:${obj.previous}`)
+              peer.write(JSON.stringify({
+                type: 'DATA',
+                value: obj.previous,
+              }))
             }
           }
         }
@@ -111,13 +147,14 @@ function addPeer(peer) {
     port: peer.port,
   }
   
-  broadCast(`HASH:${store.add(c)}`)
+  broadCast({
+    type: 'HASH',
+    value: store.add(c)
+  })
 }
 
-function broadCast(msg, ignore) {
-  console.log(`Broadcast ${msg}`)
-  
-  peers.map(p => p.write(msg))
+function broadCast(msg, ignore) {  
+  peers.map(p => p.write(JSON.stringify(msg)))
 }
 
 function createServer() {
@@ -135,12 +172,17 @@ function createServer() {
       addPeer({
         ip: connection.remoteAddress.split(':')[3],
         port: connection.remotePort,
-        write: msg => connection.write(msg),
+        write: msg => {
+          // console.log(`WRITE: ${msg}`)
+          connection.write(msg + '__')
+        },
         event: emitter
       })
 
       connection.on('data', (data) => {
-        emitter.emit('msg', data)
+        data.split('__')
+          .filter(p => p.length > 0)
+          .map(p => emitter.emit('msg', p))
       })
 
       connection.once('close', () => {
@@ -167,5 +209,8 @@ function randomPeer() {
 setInterval(() => {
   store
     .missing()
-    .map(m => randomPeer().write(`DATA:${m}`))
+    .map(m => randomPeer().write(JSON.stringify({
+      type: 'DATA',
+      value: m
+    })))
 }, 1000)
