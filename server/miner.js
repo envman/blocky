@@ -3,11 +3,11 @@ const fork = require('child_process').fork
 const EventEmitter = require('events')
 
 const genesisCode = '0000000000000000000000000000000000000000000000000000000000000000'
-const difficulty = 5
+const difficulty = 3
 
 module.exports = function createMiner(opts) {
   let pendingMoves = []
-  let tip = genesisCode
+  let tip
   let emitter = new EventEmitter()
   
   if (!opts.genesis) {
@@ -20,28 +20,43 @@ module.exports = function createMiner(opts) {
     }
     
     solve(genesis)
-    tip = opts.store.add(genesis)
+    setTip(opts.store.add(genesis))
   }
   
-  let process = fork('./solver')
+  let forked = fork('./solver')
   
-  process.on('message', (msg) => {
-    console.log('Block was solved ', hash(msg))
+  forked.on('message', (msg) => {
+    console.log('Block was solved ', hash(msg), `Previous: ${msg.previous}`)
     
-    tip = hash(msg)
+    setTip(hash(msg))
     opts.store.add(msg)
     emitter.emit('block', tip)
     
-    process.send({
+    // console.log(`Attempt to append block to ${tip}`)
+    forked.send({
       type: 'block',
       body: createBlock(tip, pendingMoves),
     })
   })
+
+  if (tip) {
+    console.log('got tip send')
+    
+    setTimeout(() => {
+      console.log('time')
+      forked.send({
+        type: 'block',
+        body: createBlock(tip, pendingMoves),
+      })      
+    }, 5000)
+
+  }
   
-  process.send({
-    type: 'block',
-    body: createBlock(tip, pendingMoves),
-  })
+  function setTip(hash) {
+    if (!hash) throw `Can not add invalid tip ${hash}`
+    
+    tip = hash
+  }
   
   return {
     addMove: function addMove(move) {
@@ -50,14 +65,33 @@ module.exports = function createMiner(opts) {
     
     addBlock: function addBlock(block) {
       // TODO: check block is valid (hash & contents)
+      console.log(`Received Block ${hash(block)} Previous: ${block.previous}`)
+      // console.log(`Current Tip ${tip}`)
+      
+      if (!tip) {
+        setTip(hash(block))
+        
+        forked.send({
+          type: 'block',
+          body: createBlock(tip, pendingMoves),
+        })
+        
+        return
+      }
       
       let current = opts.store.get(tip)
       let proposed = block
       
-      if (distance(current, store) < distance(proposed, store)) {
-        tip = hash(proposed)
+      let currentDistance = distance(current, opts.store)
+      let proposedDistance = distance(proposed, opts.store)
+      console.log(`Current Distance: ${currentDistance} Proposed Distance ${proposedDistance}`)
+      
+      if (distance(current, opts.store) < distance(proposed, opts.store)) {
+        console.log(`Current Distance less than proposed`)
         
-        process.message({
+        setTip(hash(proposed))
+        
+        forked.send({
           type: 'block',
           body: createBlock(tip, pendingMoves),
         })
@@ -65,14 +99,39 @@ module.exports = function createMiner(opts) {
     },
     
     stop: function stop() {
-      process.message({type: 'kill'})
+      forked.message({type: 'kill'})
     },
     
-    emitter
+    chain: function() {
+      let block = opts.store.get(tip)
+      let chain = []
+      
+      while (block.previous != genesisCode) {
+        chain.push({
+          hash: hash(block),
+          previous: block.previous,
+          actions: block.actions,
+        })
+        
+        block = opts.store.get(block.previous)
+      }
+      
+      chain.push({
+        hash: hash(block),
+        previous: block.previous,
+        actions: block.actions,
+      })
+      
+      return chain
+    },
+    
+    emitter: emitter
   }
 }
 
 function createBlock(previous, actions) {
+  // console.log(`Create Block Previous: ${previous}`)
+  
   return {
     type: 'block',
     previous: previous,
@@ -87,6 +146,8 @@ function distance(block, store) {
   let distance = 0
   
   while (block.previous != genesisCode) {
+    // console.log(`Previous  ${block.previous} ${store.get(block.previous)}`)
+    
     distance++
     block = store.get(block.previous)
   }

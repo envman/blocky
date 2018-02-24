@@ -1,5 +1,7 @@
 const net = require('net')
 const EventEmitter = require('events')
+const express = require('express')
+const shortid = require('shortid')
 
 const help = require('./help')
 const createStore = require('./store')
@@ -63,10 +65,24 @@ const port = help.random(1300, 1400)
 
 createServer()
   .then(() => {
-    console.log('Server Started')
+    // console.log('Server Started')
   })
 
 let peers = []
+let pendingBlocks = []
+
+function inChain(block) {
+  while (block.previous != '0000000000000000000000000000000000000000000000000000000000000000') {
+    
+    block = store.get(block.previous)
+    
+    if (!block) {
+      return false
+    }
+  }
+  
+  return true
+}
 
 function addPeer(peer) {
   console.log(`Adding peer ${peer.ip}:${peer.port}`)
@@ -117,15 +133,22 @@ function addPeer(peer) {
             // connect(`${obj.ip}:${obj.port}`)
           // }
         } else if (obj.type == 'block') {
+          pendingBlocks.push(obj)
+          store.add(obj)
+          
           if (obj.previous == '0000000000000000000000000000000000000000000000000000000000000000') {
-            miner = createMiner({genesis: obj, store: store})
-            
-            miner.emitter.on('block', (hash) => {
-              broadCast({
-                type: 'HASH',
-                value: hash
+              miner = createMiner({genesis: obj, store: store})
+              
+              miner.addMove(shortid())
+              
+              miner.emitter.on('block', (hash) => {
+                // console.log(`My Miner Mined one! ${hash}`)
+                
+                broadCast({
+                  type: 'HASH',
+                  value: hash
+                })
               })
-            })
           } else {
             if (!store.get(obj.previous)) {
               peer.write(JSON.stringify({
@@ -134,6 +157,19 @@ function addPeer(peer) {
               }))
             }
           }
+          
+          let newPending = []
+          
+          for (let block of pendingBlocks) {
+            if (inChain(block)) {
+              console.log('Block in Chain')
+              miner.addBlock(block)
+            } else {
+              newPending.push(block)
+            }
+          }
+          
+          pendingBlocks = newPending
         }
       }
     }
@@ -154,6 +190,8 @@ function addPeer(peer) {
 }
 
 function broadCast(msg, ignore) {  
+  if (!msg.value) throw new Error('No Message Value')
+  
   peers.map(p => p.write(JSON.stringify(msg)))
 }
 
@@ -163,7 +201,7 @@ function createServer() {
     
     server.on('connection', (connection) => {
       let address = connection.remoteAddress + ':' + connection.remotePort
-      console.log('new client connection from %s', address)
+      // console.log('new client connection from %s', address)
 
       connection.setEncoding('utf8')
 
@@ -195,7 +233,8 @@ function createServer() {
     })
     
     server.listen(port, function() {
-      console.log('server listening to ', server.address())
+      console.log(`Server Started On Port ${server.address().port}`)
+      // console.log('server listening to ', server.address())
 
       fulfill()
     })
@@ -206,11 +245,26 @@ function randomPeer() {
   return peers[help.random(0, peers.length - 1)]
 }
 
-setInterval(() => {
-  store
-    .missing()
-    .map(m => randomPeer().write(JSON.stringify({
-      type: 'DATA',
-      value: m
-    })))
-}, 1000)
+const app = express()
+
+app.get('/', (req, res) => {
+  if (!miner) {
+    return res.send('ERR')
+  }
+  
+  res.json(miner.chain())
+})
+
+let serverPort = help.random(8000, 10)
+app.listen(serverPort, () => {
+  console.log(`API on ${serverPort}`)
+})
+
+// setInterval(() => {
+  // store
+  //   .missing()
+  //   .map(m => randomPeer().write(JSON.stringify({
+  //     type: 'DATA',
+  //     value: m
+  //   })))
+// }, 1000)
