@@ -37,7 +37,7 @@ function connect(fullAddress) {
 
     let emitter = new EventEmitter()
 
-    addPeer({
+    let peer = {
       ip: address[0],
       port: address[1],
       write: msg => {
@@ -45,6 +45,15 @@ function connect(fullAddress) {
         client.write(msg + '__')
       },
       event: emitter
+    }
+    addPeer(peer)
+    
+    client.once('close', () => {
+      console.log(`Connection to server closed`)
+      
+      if (peer) {
+        peers.splice(peers.indexOf(peer), 1)
+      }
     })
 
     client.on('data', (data) => {
@@ -162,7 +171,7 @@ function addPeer(peer) {
           
           for (let block of pendingBlocks) {
             if (inChain(block)) {
-              console.log('Block in Chain')
+              // console.log('Block in Chain')
               miner.addBlock(block)
             } else {
               newPending.push(block)
@@ -204,10 +213,11 @@ function createServer() {
       // console.log('new client connection from %s', address)
 
       connection.setEncoding('utf8')
+      let peer
 
       let emitter = new EventEmitter()
 
-      addPeer({
+      peer = {
         ip: connection.remoteAddress.split(':')[3],
         port: connection.remotePort,
         write: msg => {
@@ -215,7 +225,9 @@ function createServer() {
           connection.write(msg + '__')
         },
         event: emitter
-      })
+      }
+      
+      addPeer(peer)
 
       connection.on('data', (data) => {
         data.split('__')
@@ -225,6 +237,10 @@ function createServer() {
 
       connection.once('close', () => {
         console.log(`${address} Connection Closed`)
+        
+        if (peer) {
+          peers.splice(peers.indexOf(peer), 1)
+        }
       })
 
       connection.on('error', (err) => {
@@ -253,6 +269,38 @@ app.get('/', (req, res) => {
   }
   
   res.json(miner.chain())
+})
+
+app.get('/world', (req, res) => {
+  if (!miner) {
+    return res.send('ERR')
+  }
+  
+  let chain = miner.chain()
+  while (chain.length > 0) {
+    let oldest = chain.pop()
+    
+    
+  }
+})
+
+app.post('/move', (req, res) => {
+  if (!miner) {
+    return res.send('ERR')
+  }
+  
+  let x = req.body.x
+  let y = req.body.y
+  
+  let action = {
+    x: x,
+    y: y,
+    stamp: new Date().toString()
+  }
+  
+  miner.addMove(action)
+  
+  res.send('OK')
 })
 
 let serverPort = help.random(8000, 10)

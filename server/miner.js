@@ -15,6 +15,7 @@ module.exports = function createMiner(opts) {
       type: 'block',
       previous: genesisCode,
       difficulty: difficulty,
+      turn: 0,
       nonce: 0,
       actions: []
     }
@@ -35,18 +36,15 @@ module.exports = function createMiner(opts) {
     // console.log(`Attempt to append block to ${tip}`)
     forked.send({
       type: 'block',
-      body: createBlock(tip, pendingMoves),
+      body: createBlock(opts.store.get(tip), pendingMoves),
     })
   })
 
-  if (tip) {
-    console.log('got tip send')
-    
+  if (tip) {    
     setTimeout(() => {
-      console.log('time')
       forked.send({
         type: 'block',
-        body: createBlock(tip, pendingMoves),
+        body: createBlock(opts.store.get(tip), pendingMoves),
       })      
     }, 5000)
 
@@ -73,7 +71,7 @@ module.exports = function createMiner(opts) {
         
         forked.send({
           type: 'block',
-          body: createBlock(tip, pendingMoves),
+          body: createBlock(opts.store.get(tip), pendingMoves),
         })
         
         return
@@ -84,16 +82,16 @@ module.exports = function createMiner(opts) {
       
       let currentDistance = distance(current, opts.store)
       let proposedDistance = distance(proposed, opts.store)
-      console.log(`Current Distance: ${currentDistance} Proposed Distance ${proposedDistance}`)
+      // console.log(`Current Distance: ${currentDistance} Proposed Distance ${proposedDistance}`)
       
       if (distance(current, opts.store) < distance(proposed, opts.store)) {
-        console.log(`Current Distance less than proposed`)
+        // console.log(`Current Distance less than proposed`)
         
         setTip(hash(proposed))
         
         forked.send({
           type: 'block',
-          body: createBlock(tip, pendingMoves),
+          body: createBlock(opts.store.get(tip), pendingMoves),
         })
       }
     },
@@ -111,6 +109,7 @@ module.exports = function createMiner(opts) {
           hash: hash(block),
           previous: block.previous,
           actions: block.actions,
+          turn: block.turn,
         })
         
         block = opts.store.get(block.previous)
@@ -120,6 +119,7 @@ module.exports = function createMiner(opts) {
         hash: hash(block),
         previous: block.previous,
         actions: block.actions,
+        turn: block.turn,
       })
       
       return chain
@@ -134,14 +134,17 @@ function createBlock(previous, actions) {
   
   return {
     type: 'block',
-    previous: previous,
+    previous: hash(previous),
     difficulty: difficulty,
+    turn: previous.turn + 1,
     nonce: 0,
     actions: actions
   }
 }
 
 function distance(block, store) {
+  if (!block) throw new Error('undefined block passed to distance')
+  
   let current = block
   let distance = 0
   
@@ -149,7 +152,12 @@ function distance(block, store) {
     // console.log(`Previous  ${block.previous} ${store.get(block.previous)}`)
     
     distance++
-    block = store.get(block.previous)
+    let previous = block.previous
+    block = store.get(previous)
+    
+    if (!block) {
+      throw new Error(`Could not find block for previous ${previous}`)
+    }
   }
   
   return distance
