@@ -150,7 +150,7 @@ function addPeer(peer) {
           if (obj.previous == '0000000000000000000000000000000000000000000000000000000000000000') {
               miner = createMiner({genesis: obj, store: store})
               
-              miner.addMove(shortid())
+              // miner.addMove(shortid())
               
               miner.emitter.on('block', (hash) => {
                 // console.log(`My Miner Mined one! ${hash}`)
@@ -288,14 +288,14 @@ app.get('/world', (req, res) => {
   
   while (chain.length > 0) {
     let oldest = chain.pop()
-    console.log('generate chain world thing', oldest)
+    // console.log('generate chain world thing', oldest)
     
     for (let action of oldest.actions) {
       world[`${action.data.x}-${action.data.y}`] = action.data.color
     }
   }
   
-  console.log('WORLD', world)
+  // console.log('WORLD', world)
   res.json(world)
 })
 
