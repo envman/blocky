@@ -273,6 +273,7 @@ app.get('/', (req, res) => {
 })
 
 app.use('/web', express.static(path.join(__dirname, 'web')))
+app.use('/packages', express.static(path.join(__dirname, 'node_modules')))
 
 let world = {}
 
