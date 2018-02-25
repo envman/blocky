@@ -303,13 +303,15 @@ app.post('/move', (req, res) => {
   let y = req.body.y
   
   let action = {
+    type: 'action',
     x: x,
     y: y,
     color: req.body.color,
     stamp: new Date().toString()
   }
   
-  miner.addMove(action)
+  store.add(action)
+  // miner.addMove(action)
   
   res.send('OK')
 })

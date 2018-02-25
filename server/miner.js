@@ -6,7 +6,7 @@ const genesisCode = '00000000000000000000000000000000000000000000000000000000000
 const difficulty = 3
 
 module.exports = function createMiner(opts) {
-  let pendingMoves = []
+  // let pendingMoves = []
   let tip
   let emitter = new EventEmitter()
   
@@ -36,7 +36,7 @@ module.exports = function createMiner(opts) {
     // console.log(`Attempt to append block to ${tip}`)
     forked.send({
       type: 'block',
-      body: createBlock(opts.store.get(tip), pendingMoves),
+      body: createBlock(opts.store.get(tip), pendingMoves(opts.store, tip)),
     })
   })
 
@@ -44,7 +44,7 @@ module.exports = function createMiner(opts) {
     setTimeout(() => {
       forked.send({
         type: 'block',
-        body: createBlock(opts.store.get(tip), pendingMoves),
+        body: createBlock(opts.store.get(tip), pendingMoves(opts.store, tip)),
       })      
     }, 5000)
 
@@ -57,10 +57,6 @@ module.exports = function createMiner(opts) {
   }
   
   return {
-    addMove: function addMove(move) {
-      pendingMoves.push(move)
-    },
-    
     addBlock: function addBlock(block) {
       // TODO: check block is valid (hash & contents)
       console.log(`Received Block ${hash(block)} Previous: ${block.previous}`)
@@ -71,7 +67,7 @@ module.exports = function createMiner(opts) {
         
         forked.send({
           type: 'block',
-          body: createBlock(opts.store.get(tip), pendingMoves),
+          body: createBlock(opts.store.get(tip), pendingMoves(opts.store, tip)),
         })
         
         return
@@ -84,14 +80,14 @@ module.exports = function createMiner(opts) {
       let proposedDistance = distance(proposed, opts.store)
       // console.log(`Current Distance: ${currentDistance} Proposed Distance ${proposedDistance}`)
       
-      if (distance(current, opts.store) < distance(proposed, opts.store)) {
+      if (distance(current, opts.store) < distance(proposed, opts.store, tip)) {
         // console.log(`Current Distance less than proposed`)
         
         setTip(hash(proposed))
         
         forked.send({
           type: 'block',
-          body: createBlock(opts.store.get(tip), pendingMoves),
+          body: createBlock(opts.store.get(tip), pendingMoves(opts.store, tip)),
         })
       }
     },
@@ -127,6 +123,34 @@ module.exports = function createMiner(opts) {
     
     emitter: emitter
   }
+}
+
+function crawl(start, store, action) {
+  let current = store.get(start)
+  
+  while (current) {
+    action(current)
+    
+    current = store.get(current.previous)
+  }
+}
+
+function pendingMoves(store, tip) {
+  let doneActions = []
+  crawl(hash(tip), store, block => {
+    doneActions.push(...block.actions.map(a => hash(a)))
+  })
+  
+  // console.log('store', store.all())
+  // console.log(doneActions)
+  let pend = store.all()
+    .filter(o => o.data)
+    .filter(o => o.data.type == 'action')
+    .filter(a => doneActions.indexOf(a.hash) < 0)
+    
+  console.log(pend)
+  
+  return pend
 }
 
 function createBlock(previous, actions) {
