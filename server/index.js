@@ -2,6 +2,7 @@ const net = require('net')
 const EventEmitter = require('events')
 const express = require('express')
 const shortid = require('shortid')
+const path = require('path')
 
 const help = require('./help')
 const createStore = require('./store')
@@ -271,6 +272,10 @@ app.get('/', (req, res) => {
   res.json(miner.chain())
 })
 
+app.use('/web', express.static(path.join(__dirname, 'web')))
+
+let world = {}
+
 app.get('/world', (req, res) => {
   if (!miner) {
     return res.send('ERR')
@@ -280,8 +285,12 @@ app.get('/world', (req, res) => {
   while (chain.length > 0) {
     let oldest = chain.pop()
     
-    
+    for (let action of oldest.actions) {
+      world[`${action.x}-${action.y}`] = action.color
+    }
   }
+  
+  res.json(world)
 })
 
 app.post('/move', (req, res) => {
@@ -295,6 +304,7 @@ app.post('/move', (req, res) => {
   let action = {
     x: x,
     y: y,
+    color: req.body.color,
     stamp: new Date().toString()
   }
   
