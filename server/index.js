@@ -3,6 +3,7 @@ const EventEmitter = require('events')
 const express = require('express')
 const shortid = require('shortid')
 const path = require('path')
+const bodyParser = require('body-parser')
 
 const help = require('./help')
 const createStore = require('./store')
@@ -264,6 +265,8 @@ function randomPeer() {
 
 const app = express()
 
+app.use(bodyParser.json())
+
 app.get('/', (req, res) => {
   if (!miner) {
     return res.send('ERR')
@@ -275,22 +278,24 @@ app.get('/', (req, res) => {
 app.use('/web', express.static(path.join(__dirname, 'web')))
 app.use('/packages', express.static(path.join(__dirname, 'node_modules')))
 
-let world = {}
-
 app.get('/world', (req, res) => {
   if (!miner) {
     return res.send('ERR')
   }
   
   let chain = miner.chain()
+  let world = {}
+  
   while (chain.length > 0) {
     let oldest = chain.pop()
+    console.log('generate chain world thing', oldest)
     
     for (let action of oldest.actions) {
-      world[`${action.x}-${action.y}`] = action.color
+      world[`${action.data.x}-${action.data.y}`] = action.data.color
     }
   }
   
+  console.log('WORLD', world)
   res.json(world)
 })
 

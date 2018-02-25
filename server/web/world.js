@@ -11,16 +11,24 @@ lords = function() {
           update(data)
         }
       })
-  }, 1000)
+  }, 5000)
   
   return {
     update: (cb) => update = cb,
     
     select: (x, y) => {
-      fetch('https://api.github.com/gists', {
+      var request = new Request('/move', {
         method: 'post',
+      	headers: new Headers({
+      		'Content-Type': 'application/json'
+      	}),
         body: JSON.stringify({x: x, y: y, color: color})
       })
+      
+      fetch(request)
+        .then(() => {
+          console.log('happy')
+        })
     }
   }
 }

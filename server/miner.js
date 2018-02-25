@@ -148,7 +148,7 @@ function pendingMoves(store, tip) {
     .filter(o => o.data.type == 'action')
     .filter(a => doneActions.indexOf(a.hash) < 0)
     
-  console.log(pend)
+  // console.log('pend', pend)
   
   return pend
 }
