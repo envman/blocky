@@ -8,6 +8,7 @@ const bodyParser = require('body-parser')
 const help = require('./help')
 const createStore = require('./store')
 const createMiner = require('./miner')
+const createUser = require('./cryptey')
 
 let fullAddress = process.argv[2]
 let store = createStore()
@@ -150,11 +151,7 @@ function addPeer(peer) {
           if (obj.previous == '0000000000000000000000000000000000000000000000000000000000000000') {
               miner = createMiner({genesis: obj, store: store})
               
-              // miner.addMove(shortid())
-              
               miner.emitter.on('block', (hash) => {
-                // console.log(`My Miner Mined one! ${hash}`)
-                
                 broadCast({
                   type: 'HASH',
                   value: hash
