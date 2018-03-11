@@ -18,7 +18,10 @@ function run() {
     let attempt = hash(currentBlock)
     
     if (isSolution(attempt, currentBlock.difficulty)) {
-      process.send(currentBlock)
+      process.send({
+        hash: attempt,
+        block: currentBlock,
+      })
       
       currentBlock = undefined
     } else {
