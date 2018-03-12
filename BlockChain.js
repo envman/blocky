@@ -2,6 +2,7 @@ const EventEmitter = require('events')
 const fork = require('child_process').fork
 
 const Network = require('./Network')
+const User = require('./User')
 
 const genesisCode = '0000000000000000000000000000000000000000000000000000000000000000'
 
@@ -10,6 +11,7 @@ const BlockChain = function(opts) {
   
   this.network = opts.network || new Network(opts)
   this.miner = opts.miner || fork('./miner')
+  this.user = opts.user || new User(opts)
   this.difficulty = opts.difficulty || 4
   
   this.network.on('block', (event) => {    
@@ -75,7 +77,22 @@ BlockChain.prototype.join = function(opts) {
       if (opts.server) {
         this.network.connect(opts.server)
       }
+      
+      if (!this.user.exists()) {
+        this.user.create()
+      }
+      
+      let user = this.user.public()
+      
+      if (!this.network.get(user.hash)) {
+        this.network.publish(user.value)
+      }
+      
+      if (opts.cb) {
+        opts.cb()
+      }
     })
+    .catch((err) => console.error(err))
 }
 
 BlockChain.prototype.kill = function() {
@@ -83,7 +100,7 @@ BlockChain.prototype.kill = function() {
 }
 
 BlockChain.prototype.distance = function(block) {
-  if (!block) throw new Error('undefined block passed to distance')  
+  if (!block) throw new Error('undefined block passed to distance')
   
   let current = block
   let distance = 0

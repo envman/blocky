@@ -1,3 +1,6 @@
+const express = require('express')
+const bodyParser = require('body-parser')
+
 const BlockChain = require('./BlockChain')
 const helpers = require('./help')
 
@@ -17,6 +20,16 @@ let opts = {
   server: argv.s
 }
 
-console.log(opts)
-
 blockChain.join(opts)
+
+const app = express()
+
+app.use(bodyParser.json())
+
+app.use('/web', express.static(path.join(__dirname, 'web')))
+app.use('/packages', express.static(path.join(__dirname, 'node_modules')))
+
+let apiPort = argv.apiPort || 8080
+app.listen(apiPort, () => {
+  console.log(`API on ${apiPort}`)
+})
