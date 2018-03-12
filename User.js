@@ -7,8 +7,8 @@ const User = function(opts) {
   opts = opts || {}
   this.fs = opts.fs || require('fs')
   
-  this.name = opts.name || 'dummy'
-  this.keyFile = path.join(__dirname, `${this.name}.key`)
+  this.username = opts.username || 'dummy'
+  this.keyFile = path.join(__dirname, `${this.username}.key`)
   
   if (this.fs.existsSync(this.keyFile)) {
     this.key = this.fs.readFileSync(this.keyFile)
@@ -32,7 +32,7 @@ User.prototype.create = function() {
 User.prototype.public = function() {
   let publicRecord = {
     type: 'user',
-    name: this.name,
+    name: this.username,
     key: secp256k1.publicKeyCreate(this.key).toString('hex'),
   }
   

@@ -1,5 +1,6 @@
 const express = require('express')
 const bodyParser = require('body-parser')
+const path = require('path')
 
 const BlockChain = require('./BlockChain')
 const helpers = require('./help')
@@ -7,7 +8,8 @@ const helpers = require('./help')
 var argv = require('minimist')(process.argv.slice(2))
 
 let blockChain = new BlockChain({
-  difficulty: argv.d
+  difficulty: argv.d,
+  username: argv.u,
 })
 
 blockChain.on('block', event => {
@@ -17,7 +19,7 @@ blockChain.on('block', event => {
 let opts = {
   genesis: !!argv.g,
   port: argv.p || helpers.random(2000, 100),
-  server: argv.s
+  server: argv.s,
 }
 
 blockChain.join(opts)
