@@ -1,5 +1,4 @@
 const fakeTcp = require('./framework/fake_tcp')
-
 const fakeNetwork = fakeTcp()
 
 const BlockChain = require('../BlockChain')
@@ -16,13 +15,13 @@ describe('System Test', () => {
       genesis: true,
       port: 2001
     })
-    
+
     let once
-    
+
     blockChain.on('block', (event) => {
       // console.log(event)
       blockChain.kill()
-      
+
       if (!once) {
         once = true
         done()
@@ -31,6 +30,6 @@ describe('System Test', () => {
   })
 
   it('Should probably do something', () => {
-    
+
   })
 })
