@@ -97,6 +97,14 @@ BlockChain.prototype.join = function(opts) {
           nonce: 0,
           actions: this.pendingActions
         }
+        
+        genesis.actions.unshift({
+          action: 'transfer-land',
+          value: {
+            square: '0-0',
+            to: user.value.record.key
+          }
+        })
 
         this.tip = genesis
         this.miner.send({
@@ -139,13 +147,20 @@ BlockChain.prototype.distance = function(block) {
 
 BlockChain.prototype.view = function() {  
   let view = {
-    users: []
+    users: [],
+    land: {}
   }
   
   this.walk(block => {    
     for (let action of block.actions) {
       if (action.action == 'create-user') {
         view.users.push(action.value.record)
+      }
+      
+      if (action.action == 'transfer-land') {
+        view.land[action.value.square] = {
+          owner: action.value.to
+        }
       }
     }
   })

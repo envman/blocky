@@ -79,8 +79,9 @@ describe('Adding an action', () => {
   })
   
   it('wtf', () => {
+    let result = zone[1].chain.view()
+    let genesisUser = result.users.find(u => u.name == 'user_0')
     
-    
-    // zone[0].miner._generate()
+    assert(result.land['0-0'].owner === genesisUser.key)
   })
 })
