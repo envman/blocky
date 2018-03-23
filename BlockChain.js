@@ -1,8 +1,10 @@
 const EventEmitter = require('events')
 const fork = require('child_process').fork
+const sha256 = require('sha256')
 
 const Network = require('./Network')
 const User = require('./User')
+const pos = require('./pos')
 
 const genesisCode = '0000000000000000000000000000000000000000000000000000000000000000'
 
@@ -25,15 +27,7 @@ const BlockChain = function(opts) {
     if (!this.tip || this.distance(event.block) > this.distance(this.tip)) {
       this.tip = event.block
 
-      this.miner.send({
-        type: 'block',
-        body: {
-          type: 'block',
-          previous: event.hash,
-          difficulty: this.difficulty,
-          nonce: 0,
-        }
-      })
+      this.updateMiner(event.hash)
 
       event.source = 'Network'
       this.emit('block', event)
@@ -44,22 +38,13 @@ const BlockChain = function(opts) {
     this.network.publish(event.block)
 
     this.tip = event.block
-    this.miner.send({
-      type: 'block',
-      body: {
-        type: 'block',
-        previous: event.hash,
-        difficulty: this.difficulty,
-        nonce: 0,
-      }
-    })
+    this.updateMiner(event.hash)
 
     event.source = 'Miner'
     this.emit('block', event)
   })
   
   this.network.on('action', (action) => {
-    // console.log('ACTION')
     this.pendingActions.push(action)
   })
 }
@@ -95,13 +80,13 @@ BlockChain.prototype.join = function(opts) {
           previous: genesisCode,
           difficulty: this.difficulty,
           nonce: 0,
-          actions: this.pendingActions
+          actions: this.actions()
         }
         
         genesis.actions.unshift({
           action: 'transfer-land',
           value: {
-            square: '0-0',
+            square: '0:0',
             to: user.value.record.key
           }
         })
@@ -114,7 +99,6 @@ BlockChain.prototype.join = function(opts) {
       }
       
       if (opts.cb) {
-
         opts.cb()
       }
     })
@@ -147,6 +131,7 @@ BlockChain.prototype.distance = function(block) {
 
 BlockChain.prototype.view = function() {  
   let view = {
+    distance: this.distance(this.tip),
     users: [],
     land: {}
   }
@@ -169,6 +154,8 @@ BlockChain.prototype.view = function() {
 }
 
 BlockChain.prototype.walk = function(action) {
+  if (!this.tip) return
+    
   let current = this.tip
   action(current)
   
@@ -177,6 +164,55 @@ BlockChain.prototype.walk = function(action) {
     
     action(current)
   }
+}
+
+BlockChain.prototype.actions = function() {
+  let included = []
+  
+  this.walk(block => {
+    for (let action of block.actions) {
+      included.push(sha256.x2(JSON.stringify(action)))
+    }
+  })
+  
+  let todo = this.pendingActions.filter(a => {
+    let hash = sha256.x2(JSON.stringify(a))
+    
+    return included.indexOf(hash) < 0
+  })
+  
+  return todo
+}
+
+BlockChain.prototype.updateMiner = function(previous) {
+  let block = {
+    type: 'block',
+    previous: previous,
+    difficulty: this.difficulty,
+    nonce: 0,
+    actions: this.actions()
+  }
+  
+  let user = this.user.public()
+  let nextLand = this.nextLand(this.distance(this.tip))
+  
+  block.actions.unshift({
+    action: 'transfer-land',
+    value: {
+      square: nextLand,
+      to: user.value.record.key
+    }
+  })
+  
+  this.miner.send({
+    type: 'block',
+    body: block
+  })
+}
+
+BlockChain.prototype.nextLand = function(distance) {
+  let coords = pos(distance + 1)
+  return `${coords.x}:${coords.y}`
 }
 
 module.exports = BlockChain

@@ -3,13 +3,56 @@ const assert = require('assert')
 
 const FakeMiner = require('./framework/FakeMiner')
 const FakeNetwork = require('./framework/FakeNetwork')
+const blockFactory = require('./framework/fake_block_factory')
 
 const BlockChain = require('../BlockChain')
 
 describe('When using the block chain', () => {
   let test = {}
 
-  beforeEach(() => {
+  beforeEach((done) => {    
+    test.miner = new FakeMiner()
+    test.network = new FakeNetwork()
+
+    test.blockChain = new BlockChain({
+      miner: test.miner,
+      network: test.network,
+      difficulty: 0,
+    })
+    
+    test.blockChain.join({genesis: true, cb: done})
+  })
+  
+  it('Should pass kill to miner', () => {
+    test.blockChain.kill()
+  
+    assert.equal('kill', test.miner.message.type)
+  })
+
+  it('Should generate gensis block', () => {
+    assert.equal('0000000000000000000000000000000000000000000000000000000000000000', test.miner.block.previous)
+  })
+  
+  it('Should use difficulty', () => {
+    assert.equal(0, test.miner.block.difficulty)
+  })
+  
+  it('Should connect to network', () => {  
+    assert.equal(true, test.network.started, 'Network should be started')
+  })
+  
+  it('Should pass opts', () => {
+    let opts = {test:'hey'}
+    test.blockChain.join(opts)
+  
+    assert.equal(opts.test, test.network.startOpts.test)
+  })
+})
+
+describe('When not genesis', () => {
+  let test = {}
+
+  beforeEach((done) => {    
     test.miner = new FakeMiner()
     test.network = new FakeNetwork()
 
@@ -18,127 +61,103 @@ describe('When using the block chain', () => {
       network: test.network,
       difficulty: 1,
     })
+    
+    test.blockChain.join({cb: done})
   })
-
-  it('Should pass kill to miner', () => {
-    test.blockChain.join({})
-
-    test.blockChain.kill()
-
-    assert.equal('kill', test.miner.message.type)
-  })
-
-  it('Should generate gensis block', () => {
-    test.blockChain.join({genesis: true})
-
-    assert.equal('0000000000000000000000000000000000000000000000000000000000000000', test.miner.block.previous)
-  })
-
-  it('Should use difficulty', () => {
-    test.blockChain.join({genesis: true})
-
-    assert.equal(1, test.miner.block.difficulty)
-  })
-
-  it('Should connect to network', () => {
-    test.blockChain.join()
-
-    assert.equal(true, test.network.started, 'Network should be started')
-  })
-
-  it('Should pass opts', () => {
-    let opts = {test:'hey'}
-    test.blockChain.join(opts)
-
-    assert.equal(opts.test, test.network.startOpts.test)
-  })
-
+  
   it('Should handle blocks from network', () => {
-    test.blockChain.join()
-
-    test.network.emit('block', {
-      hash: 'B',
-      block: { previous: 'A' },
-    })
-
-    assert.equal('B', test.miner.block.previous)
+    let block = blockFactory()
+    
+    test.network.emit('block', block)
+  
+    assert.equal(block.hash, test.miner.block.previous)
   })
-
+  
   it('Should emit block event from miner', () => {
-    test.blockChain.join()
-
-    let block
+    let result
     test.blockChain.on('block', event => {
-      block = event.block
+      result = event.block
     })
-
-    test.network.emit('block', {
-      hash: 'B',
-      block: { previous: 'A' },
-    })
-
-    assert(block)
+  
+    test.network.emit('block', blockFactory())
+  
+    assert(result)
   })
-
+    
   it('Should ignore same distance blocks', () => {
-    test.blockChain.join()
-
-    test.network.data['A'] = { previous: '0000000000000000000000000000000000000000000000000000000000000000' }
-    test.network.data['B1'] = { ignore: false, previous: 'A' }
-    test.network.data['B2'] = { ignore: true, previous: 'A' }
-
-    test.network.emit('block', {hash: 'B1', block: test.network.data['B1']})
-    test.network.emit('block', {hash: 'B2', block: test.network.data['B2']})
-
-    assert.equal(test.miner.block.previous, 'B1')
+    let genesis = blockFactory()
+    test.network.data[genesis.hash] = genesis.block
+    
+    let b1 = blockFactory(genesis)
+    test.network.data[b1.hash] = b1.block
+    
+    let b2 = blockFactory(genesis)
+    test.network.data[b2.hash] = b2.block
+  
+    test.network.emit('block', b1)
+    test.network.emit('block', b2)
+  
+    assert.equal(test.miner.block.previous, b1.hash)
   })
-
+  
   it('Should accept longer blocks', () => {
-    test.blockChain.join()
+    let genesis = blockFactory()
+    test.network.data[genesis.hash] = genesis.block
+    
+    let b1 = blockFactory(genesis)
+    test.network.data[b1.hash] = b1.block
+    
+    let b2 = blockFactory(genesis)
+    test.network.data[b2.hash] = b2.block
+    
+    let c2 = blockFactory(b2)
+    test.network.data[c2.hash] = c2.block
+    
+    test.network.emit('block', b1)
+    test.network.emit('block', c2)
 
-    test.network.data['A'] = { previous: '0000000000000000000000000000000000000000000000000000000000000000' }
-    test.network.data['B1'] = { previous: 'A' }
-    test.network.data['B2'] = { previous: 'A' }
-    test.network.data['C2'] = { previous: 'B2' }
-
-    test.network.emit('block', {hash: 'B1', block: test.network.data['B1']})
-    test.network.emit('block', {hash: 'C2', block: test.network.data['C2']})
-
-    assert.equal(test.miner.block.previous, 'C2')
+    assert.equal(test.miner.block.previous, c2.hash)
   })
-
+  
   it('Should pass mined blocks to network', () => {
-    test.blockChain.join()
-
-    test.network.data['A'] = { previous: '0000000000000000000000000000000000000000000000000000000000000000' }
-
-    test.miner.emit('message', {hash: 'B', block: { data: 'testers', previous: 'A' }})
-
-    assert.equal(test.network.lastAdded.data, 'testers')
+    let genesis = blockFactory()
+    test.network.data[genesis.hash] = genesis.block
+    
+    let b1 = blockFactory(genesis)
+    test.network.data[b1.hash] = b1.block
+  
+    test.miner.emit('message', b1)
+  
+    assert.equal(test.network.lastAdded.previous, genesis.hash)
   })
-
+  
   it('Should emit block event from miner', () => {
-    test.blockChain.join()
-
-    test.network.data['A'] = { previous: '0000000000000000000000000000000000000000000000000000000000000000' }
-
-    let block
+    let genesis = blockFactory()
+    test.network.data[genesis.hash] = genesis.block
+  
+    let b1 = blockFactory(genesis)
+    test.network.data[b1.hash] = b1.block
+  
+    let result
     test.blockChain.on('block', event => {
-      block = event.block
+      result = event.block
     })
-
-    test.miner.emit('message', {hash: 'B', block: { data: 'testers', previous: 'A' }})
-
-    assert(block)
+  
+    test.miner.emit('message', b1)
+  
+    assert.equal(result.previous, genesis.hash)
   })
-
+  
+  
   it('Mine on its own creations', () => {
-    test.blockChain.join()
-
-    test.network.data['A'] = { previous: '0000000000000000000000000000000000000000000000000000000000000000' }
-
-    test.miner.emit('message', {hash: 'B', block: { data: 'testers', previous: 'A' }})
-
-    assert.equal(test.miner.block.previous, 'B')
+    let genesis = blockFactory()
+    test.network.data[genesis.hash] = genesis.block
+  
+    let b1 = blockFactory(genesis)
+    test.network.data[b1.hash] = b1.block
+  
+    test.miner.emit('message', b1)
+  
+    assert.equal(test.miner.block.previous, b1.hash)
   })
 })
