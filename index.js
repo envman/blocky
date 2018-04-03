@@ -31,6 +31,12 @@ app.use(bodyParser.json())
 app.use('/web', express.static(path.join(__dirname, 'web')))
 app.use('/packages', express.static(path.join(__dirname, 'node_modules')))
 
+app.get('/view', (req, res) => {
+  let view = blockChain.view()
+  
+  res.json(view)
+})
+
 let apiPort = argv.apiPort || 8080
 app.listen(apiPort, () => {
   console.log(`API on ${apiPort}`)

@@ -1,58 +1,9 @@
 const assert = require('assert')
-
-const FakeMiner = require('./framework/FakeMiner')
-const fakeTcp = require('./framework/fake_tcp')
-
-const BlockChain = require('../BlockChain')
-
-const fakeNetwork = fakeTcp()
-
-const createChain = function(opts) {
-  return new Promise((fulfill, reject) => {
-    let miner = new FakeMiner()
-
-    let blockChain = new BlockChain({
-      tcp: fakeNetwork,
-      miner: miner,
-      difficulty: 0,
-      username: opts.username
-    })
-
-    blockChain.join({
-      genesis: opts.genesis,
-      port: opts.port,
-      server: opts.server,
-      cb: () => {
-        fulfill({ miner: miner, chain: blockChain})
-      }
-    })
-  })
-}
-
-const createTestingZone = function(opts) {
-  let results = []
-  
-  for (let i = 0; i < opts.total; i++) {
-    let chainOpts = {
-      port: 2000 + i,
-      username: `user_${i}`
-    }
-    
-    if (i == 0) {
-      chainOpts.genesis = true
-    } else {
-      chainOpts.server = `127.0.0.1:200${i - 1}`
-    }
-    
-    results.push(createChain(chainOpts))
-  }
-  
-  return Promise.all(results)
-}
+const createTestingZone = require('./framework/testing-zone')
 
 describe('Adding an action', () => {
   let zone
-  
+
   before((done) => {
     createTestingZone({total: 2})
       .then(z => {
@@ -61,42 +12,50 @@ describe('Adding an action', () => {
       })
   })
 
-  it('Should ???', () => {    
+  it('Should ???', () => {
     zone[0].miner._generate()
 
     let result = zone[1].chain.view()
-    
+
     assert(result.users.find(u => u.name == 'user_0'))
   })
-  
+
   it('wtf', () => {
     let result = zone[1].chain.view()
     let genesisUser = result.users.find(u => u.name == 'user_0')
-    
+
     assert(result.land['0:0'].owner === genesisUser.key)
   })
 })
 
 describe('', () => {
   let zone
-  
-  before((done) => {
+
+  beforeEach((done) => {
     createTestingZone({total: 2})
       .then(z => {
         zone = z
         done()
       })
   })
-  
+
   it('should?', () => {
     zone[0].miner._generate()
     zone[1].miner._generate()
     zone[1].miner._generate()
-  
+
     let result = zone[1].chain.view()
     let user = result.users.find(u => u.name == 'user_1')
-    
+
     assert(result.land['0:-1'].owner === user.key)
     assert(result.land['1:-1'].owner === user.key)
+  })
+
+  it('Should generate cash', () => {
+    zone[0].miner._generate()
+
+    let result = zone[0].chain.view()
+
+    assert.equal(result.cash, 1000)
   })
 })

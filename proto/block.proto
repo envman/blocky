@@ -1,0 +1,14 @@
+package blocky;
+syntax = "proto3";
+ 
+enum EnumType {
+  option allow_alias = true;
+  UNKNOWN = 0;
+  STARTED = 1;
+  RUNNING = 2 [(custom_option) = "hello world"];
+}
+
+message Block {
+    
+    string awesome_field = 1; // becomes awesomeField
+}

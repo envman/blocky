@@ -4,6 +4,7 @@ const sha256 = require('sha256')
 
 const Network = require('./Network')
 const User = require('./User')
+const Random = require('./Random')
 const pos = require('./pos')
 
 const genesisCode = '0000000000000000000000000000000000000000000000000000000000000000'
@@ -14,16 +15,16 @@ const BlockChain = function(opts) {
   this.network = opts.network || new Network(opts)
   this.miner = opts.miner || fork('./miner')
   this.user = opts.user || new User(opts)
-  
+  this.random = opts.random || new Random()
+
   this.difficulty = opts.difficulty || 4
   if (opts.difficulty === 0) { // Damn truthy/falsey
     this.difficulty = opts.difficulty
   }
-  
+
   this.pendingActions = []
 
   this.network.on('block', (event) => {
-    // console.log('block from network')
     if (!this.tip || this.distance(event.block) > this.distance(this.tip)) {
       this.tip = event.block
 
@@ -43,7 +44,7 @@ const BlockChain = function(opts) {
     event.source = 'Miner'
     this.emit('block', event)
   })
-  
+
   this.network.on('action', (action) => {
     this.pendingActions.push(action)
   })
@@ -73,31 +74,11 @@ BlockChain.prototype.join = function(opts) {
           value: user.value
         })
       }
-      
-      if (opts.genesis) {
-        let genesis = {
-          type: 'block',
-          previous: genesisCode,
-          difficulty: this.difficulty,
-          nonce: 0,
-          actions: this.actions()
-        }
-        
-        genesis.actions.unshift({
-          action: 'transfer-land',
-          value: {
-            square: '0:0',
-            to: user.value.record.key
-          }
-        })
 
-        this.tip = genesis
-        this.miner.send({
-          type: 'block',
-          body: genesis
-        })
+      if (opts.genesis) {
+        this.updateMiner(genesisCode)
       }
-      
+
       if (opts.cb) {
         opts.cb()
       }
@@ -129,58 +110,73 @@ BlockChain.prototype.distance = function(block) {
   return distance
 }
 
-BlockChain.prototype.view = function() {  
+BlockChain.prototype.view = function() {
   let view = {
     distance: this.distance(this.tip),
     users: [],
-    land: {}
+    land: {},
+    me: this.user.public().value,
+    money: {}
   }
-  
-  this.walk(block => {    
+
+  this.walk(block => {
+    this.random.seed(block.previous)
+
     for (let action of block.actions) {
       if (action.action == 'create-user') {
         view.users.push(action.value.record)
       }
-      
+
       if (action.action == 'transfer-land') {
+        let rand = this.random.random(0, 2)
+
         view.land[action.value.square] = {
-          owner: action.value.to
+          owner: action.value.to,
+          type: rand == 0 ? 'grass' : 'stone'
         }
+      }
+
+      if (action.action == 'transfer-money') {
+        view.money[action.value.to] = view.money[action.value.to] || 0
+
+        view.money[action.value.to] += action.value.amount
       }
     }
   })
-  
+
+  view.cash = view.money[view.me.record.key] || 0
+
   return view
 }
 
 BlockChain.prototype.walk = function(action) {
   if (!this.tip) return
-    
+
   let current = this.tip
   action(current)
-  
+
   while (current.previous != genesisCode) {
     current = this.network.get(current.previous)
-    
+
     action(current)
   }
 }
 
 BlockChain.prototype.actions = function() {
   let included = []
-  
+
   this.walk(block => {
     for (let action of block.actions) {
       included.push(sha256.x2(JSON.stringify(action)))
     }
   })
-  
+
   let todo = this.pendingActions.filter(a => {
     let hash = sha256.x2(JSON.stringify(a))
-    
+
     return included.indexOf(hash) < 0
   })
-  
+
   return todo
 }
 
@@ -192,10 +188,16 @@ BlockChain.prototype.updateMiner = function(previous) {
     nonce: 0,
     actions: this.actions()
   }
-  
+
   let user = this.user.public()
-  let nextLand = this.nextLand(this.distance(this.tip))
-  
+  let nextLand
+
+  if (this.tip) {
+    nextLand = this.nextLand(this.distance(this.tip))
+  } else {
+    nextLand = this.nextLand(-1)
+  }
+
   block.actions.unshift({
     action: 'transfer-land',
     value: {
@@ -203,7 +205,15 @@ BlockChain.prototype.updateMiner = function(previous) {
       to: user.value.record.key
     }
   })
-  
+
+  block.actions.unshift({
+    action: 'transfer-money',
+    value: {
+      to: user.value.record.key,
+      amount: 1000
+    }
+  })
+
   this.miner.send({
     type: 'block',
     body: block

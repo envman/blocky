@@ -12,7 +12,7 @@ FakeMiner.prototype.send = function(msg) {
   if (msg.type == 'block') {
     this.block = msg.body
   }
-  
+
   this.message = msg
 }
 

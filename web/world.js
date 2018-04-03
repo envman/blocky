@@ -3,7 +3,7 @@ lords = function() {
   let color = getRandomColor()
   
   setInterval(() => {
-    fetch('/world')
+    fetch('/view')
       .then(r => r.json())
       .then(data => {
         console.log(data)

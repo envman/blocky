@@ -1,0 +1,2 @@
+const protobuf = require("protobufjs")
+
