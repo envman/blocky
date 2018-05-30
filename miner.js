@@ -3,11 +3,11 @@ const sha256 = require('sha256')
 let running = true
 let currentBlock
 
-process.on('message', (msg) => {  
+process.on('message', (msg) => {
   if (msg.type == 'block') {
     currentBlock = msg.body
   }
-  
+
   if (msg.type == 'kill') {
     running = false
   }
@@ -16,19 +16,19 @@ process.on('message', (msg) => {
 function run() {
   if (currentBlock) {
     let attempt = hash(currentBlock)
-    
+
     if (isSolution(attempt, currentBlock.difficulty)) {
       process.send({
         hash: attempt,
         block: currentBlock,
       })
-      
+
       currentBlock = undefined
     } else {
       currentBlock.nonce++
     }
   }
-  
+
   if (running) {
     setTimeout(run, 1)
   }

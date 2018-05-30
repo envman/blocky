@@ -5,7 +5,10 @@ const sha256 = require('sha256')
 const Network = require('./Network')
 const User = require('./User')
 const Random = require('./Random')
+const Contracts = require('./Contracts')
 const pos = require('./pos')
+
+const fastnoise = require('fastnoisejs')
 
 const genesisCode = '0000000000000000000000000000000000000000000000000000000000000000'
 
@@ -16,6 +19,9 @@ const BlockChain = function(opts) {
   this.miner = opts.miner || fork('./miner')
   this.user = opts.user || new User(opts)
   this.random = opts.random || new Random()
+
+  this.noise = fastnoise.Create(324)
+  this.noise.SetNoiseType(fastnoise.Perlin)
 
   this.difficulty = opts.difficulty || 4
   if (opts.difficulty === 0) { // Damn truthy/falsey
@@ -111,15 +117,21 @@ BlockChain.prototype.distance = function(block) {
 }
 
 BlockChain.prototype.view = function() {
+  if (!this.tip) {
+    return {}
+  }
+
+  let contracts = new Contracts()
+
   let view = {
     distance: this.distance(this.tip),
     users: [],
     land: {},
     me: this.user.public().value,
-    money: {}
+    money: {},
   }
 
-  this.walk(block => {
+  this.walk((block, index) => {
     this.random.seed(block.previous)
 
     for (let action of block.actions) {
@@ -128,12 +140,33 @@ BlockChain.prototype.view = function() {
       }
 
       if (action.action == 'transfer-land') {
+        let coords = action.value.square.split(':').map(c => Number(c))
+        let x = coords[0]
+        let y = coords[1]
+
         let rand = this.random.random(0, 2)
 
-        view.land[action.value.square] = {
+        let land = {
           owner: action.value.to,
-          type: rand == 0 ? 'grass' : 'stone'
+          type: 'grass'
         }
+
+        if (generators.stone(x, y)) {
+          land.type = 'stone'
+        }
+
+        // TODO: do we need to sub seed another random generator, this would stop future changes re writing history?
+        // Could be seeded with # + index?, or we could just new seed for each action...? later problem.
+
+        if (land.type == 'grass') {
+          let trees = generators.trees(x, y)
+
+          if (trees) {
+            land.trees = 8
+          }
+        }
+
+        view.land[action.value.square] = land
       }
 
       if (action.action == 'transfer-money') {
@@ -141,10 +174,58 @@ BlockChain.prototype.view = function() {
 
         view.money[action.value.to] += action.value.amount
       }
+
+      if (action.action == 'plough') {
+        if (index + 10 <= view.distance) {
+          view.land[action.value].plouged = true
+          if (index + 20 <= view.distance) {
+            view.land[action.value].ready = true
+          }
+        } else {
+          view.land[action.value].pending = true
+        }
+      }
+
+      if (action.action == 'cut-trees') {
+        if (index + 8 <= view.distance) {
+          delete view.land[action.value].trees
+          view.land[action.to].logs = 8
+        } else {
+          view.land[action.value].trees -= (view.distance - index)
+          view.land[action.value].pending = true
+          view.land[action.to].logs = 8 - view.land[action.value].trees
+        }
+      }
+
+      if (action.action == 'move-logs') {
+        contracts.move(action.value, 'logs', action.to)
+      }
+
+      if (action.action == 'harvest') {
+        if (index + 10 <= view.distance) {
+          delete view.land[action.value].plouged
+          delete view.land[action.value].ready
+        } else {
+          view.land[action.value].pending = true
+        }
+      }
+
+      if (action.action == 'build-house') {
+        contracts.building(action.value, 'house', { logs: 8 }, index, 4)
+        view.land[action.value].contract = true
+      }
+
+      if (action.action == 'build-shed') {
+        contracts.building(action.value, 'shed', { logs: 4 }, index, 3)
+        view.land[action.value].contract = true
+      }
     }
+
+    contracts.execute({index, land: view.land})
   })
 
   view.cash = view.money[view.me.record.key] || 0
+  view.contracts = contracts.view()
 
   return view
 }
@@ -152,13 +233,18 @@ BlockChain.prototype.view = function() {
 BlockChain.prototype.walk = function(action) {
   if (!this.tip) return
 
+  let forward = []
+
   let current = this.tip
-  action(current)
+  forward.unshift(current)
 
   while (current.previous != genesisCode) {
     current = this.network.get(current.previous)
+    forward.unshift(current)
+  }
 
-    action(current)
+  for (let travel of forward) {
+    action(travel, forward.indexOf(travel))
   }
 }
 
@@ -194,6 +280,10 @@ BlockChain.prototype.updateMiner = function(previous) {
 
   if (this.tip) {
     nextLand = this.nextLand(this.distance(this.tip))
+
+    if (this.distance(this.tip) > 500) {
+      block.difficulty = 2
+    }
   } else {
     nextLand = this.nextLand(-1)
   }
@@ -225,4 +315,26 @@ BlockChain.prototype.nextLand = function(distance) {
   return `${coords.x}:${coords.y}`
 }
 
+BlockChain.prototype.action = function(action) {
+  this.pendingActions.push(action)
+}
+
 module.exports = BlockChain
+
+function generator(seed, frequency, filter) {
+  let noise = fastnoise.Create(seed)
+
+  noise.SetNoiseType(fastnoise.Perlin)
+  noise.SetFrequency(frequency)
+
+  return function(x, y) {
+    let raw = noise.GetNoise(x, y)
+    return filter(raw)
+  }
+}
+
+let generators = {
+  stone: generator(1, 0.1, n => n > 0.5),
+  trees: generator(2, 0.024, n => n > 0.03),
+  // trees: generator(2, 0.01, n => n > 0.03),
+}

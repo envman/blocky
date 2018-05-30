@@ -7,6 +7,36 @@ let me
 let selected
 let lastWorld
 
+let pendingAction
+
+function image_set(name) {
+  let set = {}
+  for (let i = 1; i <= 8; i++) {
+    set[i] = image(`${name}-${i}`, `resources/${name}`)
+  }
+  return set
+}
+
+let trees = image_set('trees')
+let logs = image_set('logs')
+
+function image(name, folder) {
+  var img = new Image
+  folder = folder || 'resources'
+
+  img.src = `/${folder}/${name}.png`
+  img.width = 50
+  img.height = 50
+
+  return img
+}
+
+let worker = image('worker')
+let stones = image('stones')
+let house = image('house')
+let field = image('field')
+let sign = image('sign')
+
 document.addEventListener("DOMContentLoaded", function(event) {
   var elem = document.getElementById('myCanvas'),
     elemLeft = elem.offsetLeft,
@@ -14,7 +44,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
     context = elem.getContext('2d'),
     elements = [];
 
-  let world = lords()
+  world = lords()
 
   let grid = []
 
@@ -22,13 +52,12 @@ document.addEventListener("DOMContentLoaded", function(event) {
     grid[x] = []
     for (let y = 0; y < 10; y++) {
       grid[x][y] = {
-        color: "black"
+        color: "white"
       }
     }
   }
 
   document.addEventListener("keyup", (e) => {
-    // console.log(e.keyCode)
     if (e.keyCode == 37) { // left
       offset.x++
       render(grid, land, offset, me)
@@ -66,16 +95,33 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
     if (fullX > 499) {
       if (fullY > 200) {
+        if (pendingAction) return
+
         let opts = available(lastWorld.land[selected], lastWorld.land[selected].owner == me)
         let index = Math.floor((fullY - 200) / btnheight)
 
-        console.log(opts[index])
+        if (opts[index] !== 'cut-trees' && opts[index] !== 'move-logs') {
+          world.action({ pos: selected, action: opts[index]})
+        } else {
+          pendingAction = {
+            pos: selected,
+            action: opts[index],
+          }
+        }
+
+        selected = undefined
       }
     } else {
       let x = Math.floor(fullX / size) - offset.x
       let y = Math.floor(fullY / size) - offset.y
 
-      selected = `${x}:${y}`
+      if (pendingAction) {
+        pendingAction.to = `${x}:${y}`
+        world.action(pendingAction)
+        pendingAction = undefined
+      } else {
+        selected = `${x}:${y}`
+      }
     }
 
     render(grid, land, offset, me)
@@ -91,11 +137,11 @@ let colors = {
 }
 
 function render(grid, land, offset, me) {
-  for (let x = -10; x < 10; x++) {
+  for (let x = 0; x < 10; x++) {
     grid[x] = []
-    for (let y = -10; y < 10; y++) {
+    for (let y = 0; y < 10; y++) {
       grid[x][y] = {
-        color: "black"
+        color: "white"
       }
     }
   }
@@ -112,31 +158,25 @@ function render(grid, land, offset, me) {
       continue
     }
 
-    if (key == selected) {
-      grid[x][y].border = 'white'
-    } else if (land[key].owner == me) {
-      grid[x][y].border = 'green'
-      // color = '#f97639'
-    } else {
-      grid[x][y].border = 'black'
-      // color = '#e3ffe0'
-    }
-
-    grid[x][y].color = colors[land[key].type]
+    grid[x][y] = land[key]
   }
 }
+
+let all_actions = [
+  { action: 'cut-trees', available: l => l.trees > 0 },
+  { action: 'build-house', available: l => l.type == 'grass' && !l.building && !l.contract },
+  { action: 'plough', available: l => l.type == 'grass' && !l.building && !l.contract },
+  { action: 'move-logs', available: l => l.logs > 0 },
+  { action: 'harvest', available: l => l.plouged && l.ready },
+  { action: 'build-shed', available: l => l.type == 'grass' && !l.building && !l.contract },
+]
 
 function available(land, owner) {
   if (!owner) return []
 
-  if (land.type == 'grass') {
-    return [
-      'Build Farm',
-      'Build Road'
-    ]
-  }
-
-  return ['Build Road']
+  return all_actions
+    .filter(a => a.available(land))
+    .map(a => a.action)
 }
 
 function draw(context, grid) {
@@ -150,11 +190,36 @@ function draw(context, grid) {
       let left = x * size
       let top = y * size
 
-      context.fillStyle = cell && cell.border || 'black'
+      context.fillStyle = 'white'
       context.fillRect(left, top, size, size)
 
-      context.fillStyle = cell.color
-      context.fillRect(left + 1, top + 1, size - 2, size - 2)
+      if (cell.trees > 0) {
+        context.drawImage(trees[cell.trees], left, top, size, size)
+      }
+
+      if (cell.logs > 0) {
+        context.drawImage(logs[cell.logs], left, top, size, size)
+      }
+
+      if (cell.type == 'stone') {
+        context.drawImage(stones, left, top, size, size)
+      }
+
+      if (cell.pending) {
+        context.drawImage(worker, left, top, size, size)
+      }
+
+      if (cell.plouged) {
+        context.drawImage(field, left, top, size, size)
+      }
+
+      if (cell.contract) {
+        context.drawImage(sign, left, top, size, size)
+      }
+
+      if (cell.building == 'house') {
+        context.drawImage(house, left, top, size, size)
+      }
     }
   }
 }
@@ -183,5 +248,16 @@ function drawSideBar(context, world) {
 
     context.fillStyle = 'black'
     context.fillText(opt, start, y + 30)
+  }
+
+  let contract = world.contracts[selected]
+
+  if (contract) {
+    context.fillText('Contract', start, 100)
+
+    for (let resource of Object.getOwnPropertyNames(contract.resources)) {
+      console.log(`${resource}:${contract.resources[resource]}`)
+      context.fillText(`${resource}:${contract.resources[resource]}`, start, 130)
+    }
   }
 }

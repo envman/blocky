@@ -1,33 +1,58 @@
 lords = function() {
   let update
   let color = getRandomColor()
-  
+
   setInterval(() => {
     fetch('/view')
       .then(r => r.json())
       .then(data => {
-        console.log(data)
+
         if (update) {
           update(data)
         }
       })
-  }, 5000)
-  
+  }, 1000)
+
+  _ = function(cmd) {
+    var request = new Request('/cmd', {
+      method: 'post',
+      headers: new Headers({
+        'Content-Type': 'application/json'
+      }),
+      body: JSON.stringify({ cmd })
+    })
+
+    fetch(request)
+      .then(() => {
+        console.log('done')
+      })
+  }
+
   return {
     update: (cb) => update = cb,
-    
-    select: (x, y) => {
-      var request = new Request('/move', {
+
+    // TESTING!
+    give: (name) => {
+
+    },
+
+    difficulty: (num) => {
+
+    },
+    // END TESTING
+
+    action: (action) => {
+      var request = new Request('/action', {
         method: 'post',
       	headers: new Headers({
       		'Content-Type': 'application/json'
       	}),
-        body: JSON.stringify({x: x, y: y, color: color})
+        body: JSON.stringify(action)
       })
-      
+
       fetch(request)
         .then(() => {
-          console.log('happy')
+          console.log('done')
         })
     }
   }

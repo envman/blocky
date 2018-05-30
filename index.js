@@ -30,11 +30,35 @@ app.use(bodyParser.json())
 
 app.use('/web', express.static(path.join(__dirname, 'web')))
 app.use('/packages', express.static(path.join(__dirname, 'node_modules')))
+app.use('/resources', express.static(path.join(__dirname, 'resources')))
 
 app.get('/view', (req, res) => {
   let view = blockChain.view()
   
   res.json(view)
+})
+
+app.post('/action', (req, res) => {
+  let action = {
+    action: req.body.action,
+    value: req.body.pos,
+  }
+  
+  if (req.body.to) {
+    action.to = req.body.to
+  }
+  
+  if (action.action == 'build-house') {
+    action.required = {
+      wood: {
+        amount: 10,
+      }
+    }
+  }
+  
+  blockChain.action(action)
+  
+  res.send('OK')
 })
 
 let apiPort = argv.apiPort || 8080
