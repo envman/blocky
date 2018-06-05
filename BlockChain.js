@@ -219,6 +219,10 @@ BlockChain.prototype.view = function() {
         contracts.building(action.value, 'shed', { logs: 4 }, index, 3)
         view.land[action.value].contract = true
       }
+
+      if (action.action == 'spawn') {
+        
+      }
     }
 
     contracts.execute({index, land: view.land})

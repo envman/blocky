@@ -1,0 +1,9 @@
+module.exports = {
+  'tree': {
+
+  },
+
+  'stone': {
+
+  },
+}

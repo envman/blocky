@@ -13,20 +13,20 @@ lords = function() {
       })
   }, 1000)
 
-  _ = function(cmd) {
-    var request = new Request('/cmd', {
-      method: 'post',
-      headers: new Headers({
-        'Content-Type': 'application/json'
-      }),
-      body: JSON.stringify({ cmd })
-    })
-
-    fetch(request)
-      .then(() => {
-        console.log('done')
-      })
-  }
+  // _ = function(cmd) {
+  //   var request = new Request('/cmd', {
+  //     method: 'post',
+  //     headers: new Headers({
+  //       'Content-Type': 'application/json'
+  //     }),
+  //     body: JSON.stringify({ cmd })
+  //   })
+  //
+  //   fetch(request)
+  //     .then(() => {
+  //       console.log('done')
+  //     })
+  // }
 
   return {
     update: (cb) => update = cb,

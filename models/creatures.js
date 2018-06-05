@@ -1,0 +1,9 @@
+module.exports = {
+  'cow': {
+
+  },
+
+  'human': {
+
+  },
+}

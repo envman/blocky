@@ -169,6 +169,9 @@ let all_actions = [
   { action: 'move-logs', available: l => l.logs > 0 },
   { action: 'harvest', available: l => l.plouged && l.ready },
   { action: 'build-shed', available: l => l.type == 'grass' && !l.building && !l.contract },
+
+  // Testing
+  { action: 'spawn', available: l => !l.building && !l.contract },
 ]
 
 function available(land, owner) {

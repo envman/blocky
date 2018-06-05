@@ -34,20 +34,30 @@ app.use('/resources', express.static(path.join(__dirname, 'resources')))
 
 app.get('/view', (req, res) => {
   let view = blockChain.view()
-  
+
   res.json(view)
 })
+
+// app.post('/cmd', (req, res) => {
+//   const cmd = req.body.cmd
+//
+//   const parts = cmd.split(' ')
+//
+//   if (parts[0] === spawn) {
+//
+//   }
+// })
 
 app.post('/action', (req, res) => {
   let action = {
     action: req.body.action,
     value: req.body.pos,
   }
-  
+
   if (req.body.to) {
     action.to = req.body.to
   }
-  
+
   if (action.action == 'build-house') {
     action.required = {
       wood: {
@@ -55,9 +65,9 @@ app.post('/action', (req, res) => {
       }
     }
   }
-  
+
   blockChain.action(action)
-  
+
   res.send('OK')
 })
 

@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+
+<head>
+  <title>Lords</title>
+
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+  <!-- <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css"> -->
+
+  <script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+</head>
+
+<body>
+  <canvas id="game-canvas" width="700" height="500" style="border:1px solid #000000;"></canvas>
+
+  <script type="text/javascript">
+  if (window.addEventListener) {
+    window.addEventListener('load', setup, false)
+  } else if (window.attachEvent) {
+    window.attachEvent('onload', setup)
+  }
+
+  function resize() {
+    var canvas = document.getElementById("game-canvas")
+    canvas.width = window.innerWidth - 20
+    canvas.height = window.innerHeight - 20
+  }
+
+  function setup() {
+    var canvas = document.getElementById("game-canvas")
+    resize()
+
+    var context = canvas.getContext('2d')
+    context.font='34px FontAwesome'
+    context.fillText(' ',20,30);
+
+    setTimeout(run, 100)
+    // setInterval(resize, 1000)
+
+    function run() {
+      const border = 3
+      const doubleBorder = border * 2
+
+      const toolbar = {
+        width: 58,
+        height: 58,
+      }
+
+      const button = {
+        width: toolbar.width - doubleBorder,
+        height: toolbar.height - doubleBorder,
+      }
+
+      const buttons = [
+        { icon: '\uf0e3', tip: 'Build' },
+        { icon: '\uf013', tip: 'Test' },
+      ]
+
+      context.fillStyle = '#282828'
+      context.fillRect(2, canvas.height - (toolbar.height + border), canvas.width - doubleBorder, toolbar.height)
+
+      const gradient = context.createLinearGradient(0, canvas.height - button.height, 0, canvas.height)
+      gradient.addColorStop(0, '#909090')
+      gradient.addColorStop(1, '#686868')
+
+      for (const btn of buttons) {
+        const index = buttons.indexOf(btn)
+        const fullWidth = button.width + doubleBorder
+
+        const buttonX = (index * fullWidth) + border
+        const buttonY = canvas.height - (button.height + doubleBorder)
+
+        context.fillStyle = gradient
+        context.fillRect(buttonX, buttonY, button.width, button.height)
+        context.fillStyle = 'silver'
+        context.fillText(btn.icon, buttonX + 10, buttonY + 38)
+      }
+    }
+  }
+  </script>
+</body>
+
+</html>
