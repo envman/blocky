@@ -38,6 +38,8 @@ app.get('/view', (req, res) => {
   res.json(view)
 })
 
+// TODO: integration point. available actions.
+
 // app.post('/cmd', (req, res) => {
 //   const cmd = req.body.cmd
 //

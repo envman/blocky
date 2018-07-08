@@ -116,6 +116,7 @@ BlockChain.prototype.distance = function(block) {
   return distance
 }
 
+// TODO: breakout view?
 BlockChain.prototype.view = function() {
   if (!this.tip) {
     return {}
@@ -135,6 +136,8 @@ BlockChain.prototype.view = function() {
     this.random.seed(block.previous)
 
     for (let action of block.actions) {
+      // TODO: integration point, run actions 
+
       if (action.action == 'create-user') {
         view.users.push(action.value.record)
       }
@@ -221,7 +224,7 @@ BlockChain.prototype.view = function() {
       }
 
       if (action.action == 'spawn') {
-        
+
       }
     }
 

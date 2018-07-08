@@ -1,5 +1,5 @@
 module.exports = {
-  'house': {
+  'log-house': {
     requirements: { logs: 4 },
     duration: 4,
     canDeploy: (tile) => !tile.building,
@@ -9,10 +9,6 @@ module.exports = {
     requirements: { logs: 4 },
     duration: 4,
     canDeploy: tile => !tile.building,
-    enable: {
-      'cut-logs': {
-
-      }
-    }
+    enable: ['cut-logs']
   },
 }
